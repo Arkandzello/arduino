@@ -1,0 +1,123 @@
+#include <WiFiNINA.h>  // for use with Arduino Uno WiFi Rev2
+
+float temperatura; //Utworzenie zmiennej przechowującej temperaturę
+int LM35 = 0;     //Czujnik podłączony do analogowego pinu 0
+
+// Network
+char ssid[] = "Monopolowy 24h";     // your network SSID (name)
+char pass[] = "twojastara1";  // your network password
+int status = WL_IDLE_STATUS;
+WiFiServer server(80);
+
+
+
+void setup() {
+  Serial.begin(9600);  // initialize serial communication
+  // Check for the presence of the WiFi device
+  if (WiFi.status() == WL_NO_SHIELD || WiFi.status() == WL_NO_MODULE) {
+    Serial.println("Communication with WiFi device failed!");
+    while (true);  // don't continue
+  } else {
+    Serial.println("WiFi device found.");
+  }
+
+  String fv = WiFi.firmwareVersion();
+  if (fv < "1.0.0") {
+    Serial.println("Please upgrade the firmware.");
+  }
+
+  // Attempt to connect to WiFi network
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to network named: ");
+    Serial.println(ssid);  // print the network name (SSID)
+
+    // Connect to WPA/WPA2 network.  Change this line if using open or WEP network.
+    status = WiFi.begin(ssid, pass);
+    delay(10000);  // wait 10 seconds for connection
+  }
+  server.begin();     // start the web server on port 80
+  printWifiStatus();  // you're connected now, so print the status
+  Serial.println();
+}
+
+
+void loop() {
+  WiFiClient client = server.available();  // listen for incoming clients
+
+  if (client) {                            // if you get a client,
+    Serial.println("New Client");          // print a message to the serial port
+    String currentLine = "";               // make a string to hold incoming data from the client
+    while (client.connected()) {           // loop while the client is connected
+      if (client.available()) {            // if there are bytes to read from the client,
+        char c = client.read();            // read a byte, then
+        Serial.write(c);                   // print it to the serial monitor
+        if (c == '\n') {                   // if the byte is a newline character
+          // If the current line is blank, you got two newline characters in a row
+          // and that is the end of the client HTTP request, so send a response
+          if (currentLine.length() == 0) {
+            showWebPage(client);  // construct and display web page
+            break;                // break out of the while loop
+          } else {  // if you got a newline, then clear currentLine
+            currentLine = "";
+          }
+        } else if (c != '\r') {  // if you got anything else but a carriage return character,
+          currentLine += c;      // add it to the end of the currentLine
+        }
+      }
+    }
+
+    // Close the connection
+    client.stop();
+    Serial.println("Client disconnected.");
+    Serial.println();
+  }
+
+  temperatura = analogRead(LM35); //Odczytanie napięcia z czujnika temperatury
+  temperatura = temperatura * 0.48828125; //Wyznaczenie temperatury
+
+  Serial.print("Temperatura: ");
+  Serial.println(temperatura);
+
+  delay(1000); //Odświeżanie co 1 sekundę
+}
+
+
+void showWebPage(WiFiClient client) {
+  // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
+  // and a Content-Type so the client knows what's coming, then a blank line
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: text/html");
+  client.println();
+
+  // The content of the HTTP response follows the header
+  client.println("<h1>TEMPERATURA</h1>");
+  client.println("<table border=1 style='text-align:center'>");
+  client.println(temperatura);
+
+  // The HTTP response ends with another blank line
+  client.println();
+}
+
+
+
+void printWifiStatus() {
+  // Print the SSID of the network you're attached to
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // Print your WiFi device's IP address
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // Print the received signal strength
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+
+  // Print where to go in a browser
+  Serial.print("To see this page in action, open a browser to http://");
+  Serial.println(ip);
+}
+
